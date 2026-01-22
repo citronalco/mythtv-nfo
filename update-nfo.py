@@ -8,6 +8,10 @@ from lxml import etree
 import requests
 from pathvalidate import sanitize_filename
 
+# Darauf hinweisen, dass das auch mit mehreren Verzeichnissen in Storage-Groups funktioniert
+# zweck: kodi-addon gut, aber nfo-dateien auch gut in anderen programmen, zb jellyfin. symlinks mit human readable names praktisch
+# auf myth2kodi verweisen
+
 
 def create_symlink(source, dest, metadata):
     """Create a symlink"""
@@ -131,10 +135,6 @@ def main():
         if get_text(recording_xml, 'Recording/RecGroup').lower() in SKIP_RECORDING_GROUPS:
             continue
 
-        # Skip recordings marked as "DAMAGED"
-        if "DAMAGED" in get_text(recording_xml, 'VideoPropNames'):
-            continue
-
         # Gather recording info required for nfo file
         metadata = {
             'season': get_text(recording_xml, 'Season'),
@@ -147,6 +147,7 @@ def main():
             'premiered': get_datetime_from_iso(recording_xml, 'Airdate'),
             'runtime_minutes': str(int((get_datetime_from_iso(recording_xml, 'EndTime') \
                                 - get_datetime_from_iso(recording_xml, 'StartTime')).total_seconds() / 60)),
+            'damaged': True if "DAMAGED" in get_text(recording_xml, 'VideoPropNames') else False,
             'cast': [],
         }
 
@@ -180,7 +181,7 @@ def main():
             continue
 
 
-        # Create nfo file (and symlink, if TARGET_DIR is set)
+        # Create nfo file (and symlink)
         (recording_stem, recording_suffix) = os.path.splitext(metadata['filename'])
         if TARGET_DIR:
             # Human readable filename (append datetime and channel to title text)
@@ -188,6 +189,7 @@ def main():
                 metadata['title_text'],
                '[' + metadata['start_datetime'].astimezone().strftime('%Y%m%dT%H%M') + ']',
                '[' + metadata['channel_name'] + ']' if metadata['channel_name'] else None,
+               '[DAMAGED]' if metadata['damaged'] else None,
             ])))
             create_symlink(
                 os.path.join(metadata['directory'], metadata['filename']),
